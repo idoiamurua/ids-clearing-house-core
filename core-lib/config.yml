@@ -1,0 +1,7 @@
+database_url: 127.0.0.1
+database_port: 27017
+
+document_api_url: http://localhost:8001
+blockchain_api_url: http://172.31.6.49:8003
+keyring_api_url: http://localhost:8002
+daps_api_url: https://daps.aisec.fraunhofer.de

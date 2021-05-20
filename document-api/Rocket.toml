@@ -1,0 +1,14 @@
+[development]
+address = "localhost"
+port = 8001
+log = "normal"
+limits = { forms = 32768 }
+
+[production]
+address = "0.0.0.0"
+port = 8001
+log = "normal"
+limits = { forms = 32768 }
+
+[global.limits]
+json = 5242880

@@ -1,0 +1,7 @@
+database_url: localhost
+database_port: 27017
+
+keyring_api_url: http://localhost:8002
+daps_api_url: https://daps.aisec.fraunhofer.de
+
+init_db: true
