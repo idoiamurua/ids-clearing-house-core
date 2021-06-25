@@ -1,14 +1,14 @@
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Process {
     pub id: String,
-    pub owner: String,
+    pub owners: Vec<String>,
 }
 
 impl Process {
-    pub fn new(id: String, owner: String) -> Process {
+    pub fn new(id: String, owners: Vec<String>) -> Process {
         Process {
             id,
-            owner
+            owners
         }
     }
 }
