@@ -13,6 +13,6 @@ RUN mkdir /server
 WORKDIR /server
 
 COPY target/release/document-api .
-COPY document-api/supervisord.conf supervisord.conf
+COPY docker/supervisord-document-api.conf supervisord.conf
 
 ENTRYPOINT ["/usr/bin/supervisord", "-c", "/server/supervisord.conf"]

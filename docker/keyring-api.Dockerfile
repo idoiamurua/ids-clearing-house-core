@@ -13,6 +13,6 @@ RUN mkdir /server
 WORKDIR /server
 
 COPY target/release/keyring-api .
-COPY keyring-api/supervisord.conf supervisord.conf
+COPY docker/supervisord-keyring-api.conf supervisord.conf
 
 ENTRYPOINT ["/usr/bin/supervisord", "-c", "/server/supervisord.conf"]
