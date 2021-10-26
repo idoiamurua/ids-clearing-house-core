@@ -1,40 +1,49 @@
 use biscuit::Empty;
-use rocket_contrib::json::Json;
 use rocket::State;
+use chrono::Local;
 use core_lib::{
     api::{
         ApiResponse,
         auth::ApiKey,
         claims::IdsClaims,
         client::keyring_api::KeyringApiClient,
-        HashMessage
+        DocumentReceipt
     },
     constants::ROCKET_DOC_API,
-    db::DataStore,
     model::{
+        crypto::{KeyCt, KeyCtList},
         document::Document
     }
 };
-
-#[options("/<_id>")]
-fn preflight(_id: Option<String>) -> ApiResponse { ApiResponse::PreFlight(()) }
-
-#[options("/")]
-fn preflight_main() -> ApiResponse { ApiResponse::PreFlight(()) }
+use rocket::fairing::AdHoc;
+use rocket::serde::json::{json, Json};
+use crate::db::DataStore;
+use core_lib::constants::PAYLOAD_PART;
 
 #[post("/", format = "json", data = "<document>")]
-fn create_enc_document(
+async fn create_enc_document(
     api_key: ApiKey<IdsClaims, Empty>,
-    db: State<DataStore>,
-    key_api: State<KeyringApiClient>,
+    db: &State<DataStore>,
+    key_api: &State<KeyringApiClient>,
     document: Json<Document>
 ) -> ApiResponse {
     debug!("user '{:?}' with claims {:?}", api_key.sub(), api_key.claims());
     let doc: Document = document.into_inner();
     trace!("requested document is: '{:#?}'", json!(doc));
 
+    // data validation
+    let payload: Vec<String> = doc.parts.iter()
+        .filter(|p| String::from(PAYLOAD_PART) == p.name)
+        .map(|p| p.content.as_ref().unwrap().clone()).collect();
+    if payload.len() > 1 {
+        return ApiResponse::BadRequest(String::from("Document contains two payloads!"));
+    }
+    else if payload.len() == 0 {
+        return ApiResponse::BadRequest(String::from("Document contains no payload!"));
+    }
+
     // check if doc id already exists
-    match db.exists_document(&doc.id) {
+    match db.exists_document(&doc.id).await {
         Ok(true) => {
             warn!("Document exists already!");
             ApiResponse::BadRequest(String::from("Document exists already!"))
@@ -57,7 +66,7 @@ fn create_enc_document(
             };
 
             debug!("start encryption");
-            let enc_doc;
+            let mut enc_doc;
             match doc.encrypt(keys) {
                 Ok(ct) => {
                     debug!("got ct");
@@ -69,14 +78,38 @@ fn create_enc_document(
                 },
             };
 
+            // chain the document to previous documents
+            debug!("add the chain hash...");
+            // get the document with the previous tc
+            match db.get_document_with_previous_tc(doc.tc).await{
+                Ok(Some(previous_doc)) => {
+                    enc_doc.hash = previous_doc.hash();
+                },
+                Ok(None) => {
+                    if doc.tc == 0{
+                        info!("No entries found for pid {}. Beginning new chain!", &doc.pid);
+                    }
+                    else{
+                        // If this happens, db didn't find a tc entry that should exist.
+                        return ApiResponse::InternalError(String::from("Error while creating the chain hash!"))
+                    }
+                },
+                Err(e) => {
+                    error!("Error while creating the chain hash: {:?}", e);
+                    return ApiResponse::InternalError(String::from("Error while creating the chain hash!"))
+                }
+            }
+
             // prepare the success result message
-            let res = HashMessage::new("true", "Document created", &enc_doc.id, enc_doc.hash.as_str());
+
+
+            let receipt = DocumentReceipt::new(enc_doc.ts, &enc_doc.pid, &enc_doc.id, &enc_doc.hash);
 
             debug!("storing document ....");
             // store document
             //TODO store encrypted keys
-            match db.add_document(enc_doc) {
-                Ok(_b) => ApiResponse::SuccessCreate(json!(res)),
+            match db.add_document(enc_doc).await {
+                Ok(_b) => ApiResponse::SuccessCreate(json!(receipt)),
                 Err(e) => {
                     error!("Error while adding: {:?}", e);
                     ApiResponse::InternalError(String::from("Error while storing document!"))
@@ -87,13 +120,13 @@ fn create_enc_document(
 }
 
 #[delete("/<pid>/<id>", format = "json")]
-fn delete_document(api_key: ApiKey<IdsClaims, Empty>, db: State<DataStore>, pid: String, id: String) -> ApiResponse {
+async fn delete_document(api_key: ApiKey<IdsClaims, Empty>, db: &State<DataStore>, pid: String, id: String) -> ApiResponse {
     debug!("delete called...");
     debug!("user '{:?}' with claims {:?}", api_key.sub(), api_key.claims());
     // this is only a sanity check, i.e. we make sure id/pid pair exists
-    match db.get_document(&id, &pid){
+    match db.get_document(&id, &pid).await{
         Ok(Some(_enc_doc)) => {
-            match db.delete_document(&id){
+            match db.delete_document(&id).await{
                 Ok(true) => ApiResponse::SuccessNoContent(String::from("Document deleted!")),
                 Ok(false) => ApiResponse::NotFound(String::from("Document does not exist!")),
                 Err(e) => {
@@ -110,14 +143,15 @@ fn delete_document(api_key: ApiKey<IdsClaims, Empty>, db: State<DataStore>, pid:
 }
 
 #[get("/<pid>?<doc_type>", format = "json")]
-fn get_enc_documents_for_pid(api_key: ApiKey<IdsClaims, Empty>, key_api: State<KeyringApiClient>, db: State<DataStore>, doc_type: Option<String>, pid: String) -> ApiResponse {
+async fn get_enc_documents_for_pid(api_key: ApiKey<IdsClaims, Empty>, key_api: &State<KeyringApiClient>, db: &State<DataStore>, doc_type: Option<String>, pid: String) -> ApiResponse {
     debug!("trying to retrieve documents for pid '{}'", &pid);
     debug!("user '{:?}' with claims {:?}", api_key.sub(), api_key.claims());
     // either call db with type filter or without to get cts
     let cts;
+    let start = Local::now();
     if doc_type.is_some(){
         debug!("but only of document type: '{}'", doc_type.as_ref().unwrap());
-        match db.get_documents_of_dt_for_pid(doc_type.as_ref().unwrap(), &pid){
+        match db.get_documents_of_dt_for_pid(doc_type.as_ref().unwrap(), &pid).await{
             Ok(cts_type_filter) => cts = cts_type_filter,
             Err(e) => {
                 error!("Error while retrieving document: {:?}", e);
@@ -127,7 +161,7 @@ fn get_enc_documents_for_pid(api_key: ApiKey<IdsClaims, Empty>, key_api: State<K
     }
     else{
         debug!("no type filter applied");
-        match db.get_documents_for_pid(&pid){
+        match db.get_documents_for_pid(&pid).await{
             //TODO: would like to send "{}" instead of "null" when dt is not found
             Ok(cts_unfiltered) => cts = cts_unfiltered,
             Err(e) => {
@@ -136,55 +170,68 @@ fn get_enc_documents_for_pid(api_key: ApiKey<IdsClaims, Empty>, key_api: State<K
             }
         }
     };
-    debug!("Found {} documents.", cts.len());
-    // decrypt cts
-    let pts : Vec<Document>= cts.iter()
-            .filter_map(|ct| {
-                match hex::decode(&ct.keys_ct){
-                    Ok(key_ct) => {
-                        match key_api.decrypt_keys(&api_key.raw(), &pid, &ct.dt_id, &key_ct){
-                            Ok(key_map) => {
-                                match ct.decrypt(key_map.keys, None){
-                                    Ok(d) => Some(d),
-                                    Err(e) => {
-                                        warn!("Got empty document from decryption! {:?}", e);
-                                        None
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                error!("Error while retrieving keys from keyring: {:?}", e);
-                                None
-                            }
-                        }
-                    },
+    // The db might contain no documents in which case we get an empty vector
+    if cts.is_empty(){
+        debug!("Queried empty pid: {}", &pid);
+        ApiResponse::SuccessOk(json!(cts))
+    }
+    else{
+        // Documents found for pid, now decrypting them
+        debug!("Found {} documents. Getting keys from keyring...", cts.len());
+        let key_cts: Vec<KeyCt> = cts.iter()
+            .map(|e| KeyCt::new(e.id.clone(), e.keys_ct.clone())).collect();
+        // caution! we currently only support a single dt per call, so we use the first dt we found
+        let key_cts_list = KeyCtList::new(cts[0].dt_id.clone(), key_cts);
+        // decrypt cts
+        let key_maps = match key_api.decrypt_multiple_keys(&api_key.raw(), &pid,&key_cts_list){
+            Ok(key_map) => {
+                key_map
+            }
+            Err(e) => {
+                error!("Error while retrieving keys from keyring: {:?}", e);
+                return ApiResponse::InternalError(format!("Error while retrieving keys from keyring"))
+            }
+        };
+        debug!("... keys received. Starting decryption...");
+        let pts_bulk : Vec<Document> = cts.iter().zip(key_maps.iter())
+            .filter_map(|(ct,key_map)|{
+                if ct.id != key_map.id{
+                    error!("Document and map don't match");
+                };
+                match ct.decrypt(key_map.map.keys.clone()){
+                    Ok(d) => Some(d),
                     Err(e) => {
-                        error!("Error while decoding key ciphertext: {:?}", e);
+                        warn!("Got empty document from decryption! {:?}", e);
                         None
                     }
                 }
-            })
-            .collect();
-    ApiResponse::SuccessOk(json!(pts))
+            }).collect();
+        debug!("...done.");
+        let end = Local::now();
+        let diff = end - start;
+        info!("Total time taken to run in ms: {}", diff.num_milliseconds());
+        ApiResponse::SuccessOk(json!(pts_bulk))
+    }
 }
 
 /// Retrieve document with id for process with pid
 #[get("/<pid>/<id>?<hash>", format = "json")]
-fn get_enc_document(api_key: ApiKey<IdsClaims, Empty>, key_api: State<KeyringApiClient>, db: State<DataStore>, pid: String, id: String, hash: Option<String>) -> ApiResponse {
+async fn get_enc_document(api_key: ApiKey<IdsClaims, Empty>, key_api: &State<KeyringApiClient>, db: &State<DataStore>, pid: String, id: String, hash: Option<String>) -> ApiResponse {
     debug!("user '{:?}' with claims {:?}", api_key.sub(), api_key.claims());
     debug!("trying to retrieve document with id '{}' for pid '{}'", &id, &pid);
     if hash.is_some(){
         debug!("integrity check with hash: {}", hash.as_ref().unwrap());
     }
 
-    match db.get_document(&id, &pid){
+    match db.get_document(&id, &pid).await{
         //TODO: would like to send "{}" instead of "null" when dt is not found
         Ok(Some(ct)) => {
             match hex::decode(&ct.keys_ct){
                 Ok(key_ct) => {
                     match key_api.decrypt_keys(&api_key.raw(), &pid, &ct.dt_id, &key_ct){
                         Ok(key_map) => {
-                            match ct.decrypt(key_map.keys, hash){
+                            //TODO check the hash
+                            match ct.decrypt(key_map.keys){
                                 Ok(d) => ApiResponse::SuccessOk(json!(d)),
                                 Err(e) => {
                                     warn!("Got empty document from decryption! {:?}", e);
@@ -216,8 +263,10 @@ fn get_enc_document(api_key: ApiKey<IdsClaims, Empty>, key_api: State<KeyringApi
     }
 }
 
-pub fn mount(rocket: rocket::Rocket) -> rocket::Rocket {
-    rocket
-        .mount(ROCKET_DOC_API, routes![preflight, preflight_main, create_enc_document, delete_document,
+pub fn mount_api() -> AdHoc {
+    AdHoc::on_ignite("Mounting Document API", |rocket| async {
+        rocket
+            .mount(ROCKET_DOC_API, routes![create_enc_document, delete_document,
                                             get_enc_document, get_enc_documents_for_pid])
+    })
 }

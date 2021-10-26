@@ -1,5 +1,5 @@
-use rocket_contrib::json::JsonValue;
 use std::string::ToString;
+use rocket::serde::json::Value;
 
 pub mod auth;
 pub mod claims;
@@ -7,6 +7,7 @@ pub mod client;
 
 pub trait ApiClient{
     fn new(url: &str) -> Self;
+    fn get_conf_param() -> String;
 }
 
 #[derive(Responder, Debug)]
@@ -16,9 +17,9 @@ pub enum ApiResponse {
     #[response(status = 400, content_type = "json")]
     BadRequest(String),
     #[response(status = 201, content_type = "json")]
-    SuccessCreate(JsonValue),
+    SuccessCreate(Value),
     #[response(status = 200, content_type = "json")]
-    SuccessOk(JsonValue),
+    SuccessOk(Value),
     #[response(status = 204, content_type = "json")]
     SuccessNoContent(String),
     #[response(status = 401, content_type = "json")]
@@ -29,34 +30,21 @@ pub enum ApiResponse {
     InternalError(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BlockchainMessage {
-    pub cid: String,
-    pub id: String,
-    pub hash: String,
-}
-
-impl BlockchainMessage {
-    pub fn new(id: String, cid: String, hash: String) -> BlockchainMessage {
-        BlockchainMessage { id, cid, hash }
-    }
-}
-
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct HashMessage{
-    pub success: String,
-    pub message: String,
+pub struct DocumentReceipt{
+    pub timestamp: i64,
+    pub pid: String,
     pub doc_id: String,
-    pub hash: String,
+    pub chain_hash: String,
 }
 
-impl HashMessage{
-    pub fn new(success: &str, message: &str, doc_id: &str, hash: &str) -> HashMessage{
-        HashMessage{
-            success: success.to_string(),
-            message: message.to_string(),
+impl DocumentReceipt{
+    pub fn new(timestamp: i64, pid: &str, doc_id: &str, chain_hash: &str) -> DocumentReceipt{
+        DocumentReceipt{
+            timestamp,
+            pid: pid.to_string(),
             doc_id: doc_id.to_string(),
-            hash: hash.to_string()
+            chain_hash: chain_hash.to_string(),
         }
     }
 }

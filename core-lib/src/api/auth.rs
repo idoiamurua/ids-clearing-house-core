@@ -1,35 +1,32 @@
-use rocket::{
-    Outcome,
-    State
-};
-use rocket::request::{self, Request, FromRequest};
 use biscuit::{
-    CompactJson, 
-    jwa::SignatureAlgorithm, 
-    jwk::JWKSet, 
-    JWT, 
-    CompactPart, 
-    Empty, 
+    CompactJson,
+    jwa::SignatureAlgorithm,
+    jwk::JWKSet,
+    JWT,
+    CompactPart,
+    Empty,
     ClaimsSet,
-    ValidationOptions
+    ValidationOptions,
 };
-
-use crate::{
-    constants::{
-        DAPS_AUTHHEADER,
-        DAPS_AUTHBEARER
-    },
-    errors::*,
-    api::client::daps_api::DapsApiClient
-};
+use rocket::outcome::IntoOutcome;
+use rocket::request::{self, Request, FromRequest};
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 
+use crate::{
+    constants::{
+        DAPS_AUTHHEADER,
+        DAPS_AUTHBEARER,
+    },
+    errors::*,
+    api::client::daps_api::DapsApiClient,
+};
+
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ApiKey<T, H> {
     pub token: JWT<T, H>,
-    pub raw: String
+    pub raw: String,
 }
 
 impl<T, H> ApiKey<T, H>
@@ -40,7 +37,7 @@ impl<T, H> ApiKey<T, H>
     pub fn new(token: JWT<T, H>, raw: String) -> ApiKey<T, H> {
         ApiKey::<T, H> {
             token,
-            raw
+            raw,
         }
     }
     pub fn raw(&self) -> String {
@@ -75,44 +72,50 @@ impl<T, H> ApiKey<T, H>
     }
 }
 
-impl<'a, 'r, T: DeserializeOwned + CompactJson + Debug + Clone, H: Serialize + DeserializeOwned + Clone> FromRequest<'a, 'r> for ApiKey<T, H> {
+#[rocket::async_trait]
+impl<'r, T: DeserializeOwned + CompactJson + Debug + Clone, H: Serialize + DeserializeOwned + Clone> FromRequest<'r> for ApiKey<T, H> {
     type Error = ();
 
-    fn from_request(request: &'a Request<'r>) -> request::Outcome<ApiKey<T, H>, ()> {
-        let api_client = request.guard::<State<DapsApiClient>>()?;
-        match api_client.get_jwks() {
-            Ok(jwks) => {
-                let auth_header_value: Vec<_> = request
-                    .headers()
-                    .get(&DAPS_AUTHHEADER)
-                    .collect();
-                debug!("Auth Header: {:?}", &auth_header_value);
-                if auth_header_value.len() != 1 {
-                    return Outcome::Forward(());
-                }
-                let mut iter = auth_header_value[0].split_ascii_whitespace();
-                match iter.next() {
-                    Some(DAPS_AUTHBEARER) => {
-                        let token = iter.next().unwrap_or("");
-                        debug!("bearer token {:?}", &token);
-                        match validate_token(token, jwks, Some(api_client.algorithm)) {
-                            Ok(token) => {
-                                debug!("valid token!");
-                                Outcome::Success(token)
-                            },
-                            Err(_e) => {
-                                debug!("invalid token {:?}, {:?}", &token, _e);
-                                Outcome::Forward(())
+    async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, ()> {
+        request.rocket().state::<DapsApiClient>()
+            .map(|daps_client| {
+                match daps_client.get_jwks() {
+                    Ok(jwks) => {
+                        let auth_header_value: Vec<_> = request
+                            .headers()
+                            .get(&DAPS_AUTHHEADER)
+                            .collect();
+                        debug!("Auth Header: {:?}", &auth_header_value);
+                        if auth_header_value.len() != 1 {
+                            return None;
+                        }
+                        let mut iter = auth_header_value[0].split_ascii_whitespace();
+                        match iter.next() {
+                            Some(DAPS_AUTHBEARER) => {
+                                let token = iter.next().unwrap_or("");
+                                debug!("bearer token {:?}", &token);
+                                match validate_token(token, jwks, Some(daps_client.algorithm)) {
+                                    Ok(token) => {
+                                        debug!("valid token!");
+                                        Some(token)
+                                    }
+                                    Err(_e) => {
+                                        debug!("invalid token {:?}, {:?}", &token, _e);
+                                        None
+                                    }
+                                }
                             }
+                            _ => None
                         }
                     }
-                    _ => Outcome::Forward(())
+                    Err(_e) => None
                 }
-            },
-            Err(_e) => Outcome::Forward(())
-        }
+            })
+            .expect("DAPS client not initialized")
+            .or_forward(())
     }
 }
+
 
 pub fn validate_token<T: Serialize + for<'de> Deserialize<'de> + CompactJson + Debug + Clone, H: Serialize + for<'de> Deserialize<'de> + Clone>(token: &str, jwks: JWKSet<Empty>, expected_algorithm: Option<SignatureAlgorithm>) -> Result<ApiKey<T, H>> {
     match JWT::new_encoded(token)
@@ -122,7 +125,7 @@ pub fn validate_token<T: Serialize + for<'de> Deserialize<'de> + CompactJson + D
                 Ok(()) => Ok(ApiKey::new(decoded_token, token.to_string())),
                 Err(e) => Err(Error::from(e))
             }
-        },
+        }
         Err(e) => Err(Error::from(e))
     }
 }

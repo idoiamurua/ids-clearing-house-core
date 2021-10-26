@@ -2,12 +2,13 @@ use crate::model::crypto::{KeyEntry, KeyMap};
 use crate::model::document::{Document, DocumentPart, EncryptedDocument};
 use crate::errors::*;
 use std::collections::HashMap;
+use chrono::Utc;
 
 fn create_test_doc(dt_id: String) -> Document{
     let mut doc_parts = vec!();
     doc_parts.push(DocumentPart::new(String::from("part1"), Some(String::from("MODEL_VERSION"))));
     doc_parts.push(DocumentPart::new(String::from("part2"), Some(String::from("CORRELATION_MESSAGE"))));
-    Document::new(Document::create_uuid(), dt_id, doc_parts)
+    Document::new(Document::create_uuid(), dt_id, 3241, doc_parts)
 }
 
 fn create_key_enc_map() -> KeyMap{
@@ -88,12 +89,12 @@ fn test_document_encryption() -> Result<()>{
     let dt = String::from("ids_message");
     let pid = String::from("test_pid");
     let doc = create_test_doc(dt.clone());
-    let hash = String::from("THwnYUMgoWsUcgyHBLOTxUxdPscMupGSEHwFCnNe+akf/mETHxauVz2sbgiquuEGFtP2V1p6jBsgpEAkOiNWWQ==");
+    let ts = Utc::now().timestamp();
     let key_ct = String::from("very secret key ciphertext");
     let mut cts = vec!();
     cts.push(String::from("1::4EBC3F1C2B8CB16C52E41424502FD112015D9C25919C2401514B5DD5B4233B65593CF0A4"));
     cts.push(String::from("2::FE2195305E95B9F931660CBA20B4707A1D92123022371CEDD2E70A538A8771EE7540D9F34845BBAEECEC"));
-    let expected_doc = EncryptedDocument::new(doc.id.clone(), pid, dt, hash, key_ct, cts);
+    let expected_doc = EncryptedDocument::new(doc.id.clone(), pid, dt, ts, 3241, key_ct, cts);
 
     // create KeyMap for encryption
     let keys = create_key_enc_map();
@@ -119,20 +120,20 @@ fn test_document_decryption() -> Result<()>{
 
     // prepare test data
     let mut cts = vec!();
-    let hash = String::from("yCRvbwBJcfA5xMC85DbcjzV+7x7Y0K2ohpGeQtj15EJGS27qrxsRl8ly+lutEXe1NQDBLYUnFQixNxwb7pEwYQ==");
+    let ts = Utc::now().timestamp();
     cts.push(String::from("1::4EBC3F1C2B8CB16C52E41424502FD112015D9C25919C2401514B5DD5B4233B65593CF0A4"));
     cts.push(String::from("2::FE2195305E95B9F931660CBA20B4707A1D92123022371CEDD2E70A538A8771EE7540D9F34845BBAEECEC"));
     let dt = String::from("ids_message");
     let pid = String::from("test_pid");
     let key_ct = String::from("very secure key ct");
     let expected_doc = create_test_doc(dt.clone());
-    let enc_doc = EncryptedDocument::new(expected_doc.id.clone(), pid, dt.clone(), hash, key_ct, cts);
+    let enc_doc = EncryptedDocument::new(expected_doc.id.clone(), pid, dt.clone(), ts, 3241, key_ct, cts);
 
     // create KeyMap for decryption
     let dec_keys = create_key_dec_map();
 
     // decrypt
-    let result = enc_doc.decrypt(dec_keys.keys, None)?;
+    let result = enc_doc.decrypt(dec_keys.keys)?;
 
     // ids should match
     assert_eq!(result.id, expected_doc.id);
@@ -151,37 +152,25 @@ fn test_document_decryption() -> Result<()>{
 }
 
 #[test]
-fn test_document_decryption_with_external_hash() -> Result<()>{
+fn test_encryption_hash() -> Result<()> {
 
     // prepare test data
     let mut cts = vec!();
-    let hash = String::from("yCRvbwBJcfA5xMC85DbcjzV+7x7Y0K2ohpGeQtj15EJGS27qrxsRl8ly+lutEXe1NQDBLYUnFQixNxwb7pEwYQ==");
+    let ts_fixed = 1630413850;
+    let expected_hash = String::from("eIiWaM874V6p3eeGnEEafDvcPJAzACKhXn0yEAVw0pnZNh+Lz7eLuMMtoIQ1mhY3huy0PN5h9ntZf3mBPcZkow==");
     cts.push(String::from("1::4EBC3F1C2B8CB16C52E41424502FD112015D9C25919C2401514B5DD5B4233B65593CF0A4"));
     cts.push(String::from("2::FE2195305E95B9F931660CBA20B4707A1D92123022371CEDD2E70A538A8771EE7540D9F34845BBAEECEC"));
     let dt = String::from("ids_message");
     let pid = String::from("test_pid");
+    let tc = 3241;
     let key_ct = String::from("very secure key ct");
-    let expected_doc = create_test_doc(dt.clone());
-    let enc_doc = EncryptedDocument::new(expected_doc.id.clone(), pid, dt.clone(), hash.clone(), key_ct, cts);
+    let mut expected_doc = create_test_doc(dt.clone());
+    // need to fix otherwise random id
+    expected_doc.id = String::from("a9a30044-7dfd-476f-a217-db1dc27aeb75");
 
-    // create KeyMap for decryption
-    let dec_keys = create_key_dec_map();
-
-    // decrypt
-    let result = enc_doc.decrypt(dec_keys.keys, Some(hash))?;
-
-    // ids should match
-    assert_eq!(result.id, expected_doc.id);
-
-    //check document type
-    assert_eq!(result.dt_id, expected_doc.dt_id);
-
-    //checking the parts
-    for i in 0..result.parts.len()-1{
-        //println!("part: {} {}", result.parts[i].name, result.parts[i].content.as_ref().unwrap());
-        assert_eq!(expected_doc.parts[i].name, result.parts[i].name);
-        assert_eq!(expected_doc.parts[i].content, result.parts[i].content);
-    }
+    let enc_doc = EncryptedDocument::new(expected_doc.id.clone(), pid, dt.clone(), ts_fixed, tc, key_ct, cts);
+    let hash = enc_doc.hash();
+    assert_eq!(expected_hash, hash);
 
     Ok(())
 }

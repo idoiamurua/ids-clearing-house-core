@@ -1,6 +1,0 @@
-database_url: localhost 
-database_port: 27018
-
-daps_api_url: https://daps.aisec.fraunhofer.de
-
-init_db: true

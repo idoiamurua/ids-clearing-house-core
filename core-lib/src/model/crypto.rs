@@ -33,3 +33,48 @@ impl KeyMap{
         }
     }
  }
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct KeyCt{
+    pub id: String,
+    pub ct: String
+}
+
+impl KeyCt{
+    pub fn new(id: String, ct: String) -> KeyCt{
+        KeyCt{
+            id,
+            ct
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct KeyCtList {
+    pub dt: String,
+    pub cts: Vec<KeyCt>
+}
+
+impl KeyCtList{
+    pub fn new(dt: String, cts: Vec<KeyCt>) -> KeyCtList{
+        KeyCtList{
+            dt,
+            cts
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct KeyMapListItem {
+    pub id: String,
+    pub map: KeyMap
+}
+
+impl KeyMapListItem{
+    pub fn new(id: String, map: KeyMap) -> KeyMapListItem{
+        KeyMapListItem{
+            id,
+            map
+        }
+    }
+}

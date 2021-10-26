@@ -3,19 +3,20 @@
 // Use config.yml to configure the urls correctly.
 // Before running the tests make sure that there's a valid token in auth/mod.rs
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+use core_lib::api::ApiClient;
 use core_lib::api::client::keyring_api::KeyringApiClient;
-use core_lib::constants::{CONFIG_FILE, KEYRING_API_URL};
+use core_lib::constants::KEYRING_API_URL;
 use core_lib::errors::*;
 use core_lib::util;
-use crate::{TOKEN, delete_test_doc_type_from_keyring, insert_test_doc_type_into_keyring};
+use crate::{TOKEN, delete_test_doc_type_from_keyring, insert_test_doc_type_into_keyring, TEST_CONFIG};
 
 /// The tests in this module requires a running key-ring-api
 /// Testcase: Generate keys for test document type and check if the key_map is plausible
 #[test]
 fn test_generate_keys() -> Result<()> {
     // configure client_api
-    let config = util::load_config(CONFIG_FILE);
-    let key_api: KeyringApiClient = util::configure_api(KEYRING_API_URL, &config)?;
+    let api_url = util::load_from_test_config(KEYRING_API_URL, TEST_CONFIG);
+    let key_api = KeyringApiClient::new(&api_url);
 
     // prepare test data
     let dt_id = String::from("test_dt");
@@ -48,8 +49,8 @@ fn test_generate_keys() -> Result<()> {
 #[test]
 fn test_decrypt_keys() -> Result<()> {
     // configure client_api
-    let config = util::load_config(CONFIG_FILE);
-    let key_api: KeyringApiClient = util::configure_api(KEYRING_API_URL, &config)?;
+    let api_url = util::load_from_test_config(KEYRING_API_URL, TEST_CONFIG);
+    let key_api = KeyringApiClient::new(&api_url);
 
     // prepare test data
     let dt_id = String::from("test_dt");

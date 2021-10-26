@@ -2,8 +2,8 @@ use reqwest::Client;
 use reqwest::StatusCode;
 use reqwest::header::{HeaderValue, CONTENT_TYPE};
 use serde_json;
-use crate::api::{ApiClient, HashMessage};
-use crate::constants::{ROCKET_DOC_API};
+use crate::api::{ApiClient, DocumentReceipt};
+use crate::constants::{ROCKET_DOC_API, DOCUMENT_API_URL};
 use crate::errors::*;
 use crate::model::document::Document;
 use crate::util::url_encode;
@@ -20,10 +20,14 @@ impl ApiClient for DocumentApiClient {
             uri: uri,
         }
     }
+
+    fn get_conf_param() -> String {
+        String::from(DOCUMENT_API_URL)
+    }
 }
 
 impl DocumentApiClient{
-    pub fn get_document(&self, token: &String, pid: &String, id: &String) -> Result<Document>{
+    pub fn get_document(&self, token: &String, pid: &String, id: &String) -> Result<Option<Document>>{
         let document_url = format!("{}{}/{}/{}", self.uri, ROCKET_DOC_API, url_encode(pid), url_encode(id));
         let client = Client::new();
 
@@ -35,8 +39,13 @@ impl DocumentApiClient{
             .send()?;
 
         debug!("Status Code: {}", &response.status());
-        let doc: Document = response.json()?;
-        Ok(doc)
+        match response.status(){
+            StatusCode::OK => {
+                let doc: Document = response.json()?;
+                Ok(Some(doc))
+            }
+            _ => Ok(None)
+        }
     }
 
     pub fn get_document_with_integrity_check(&self, token: &String, pid: &String, id: &String, hash: &String) -> Result<Document>{
@@ -72,7 +81,7 @@ impl DocumentApiClient{
         Ok(docs)
     }
 
-    pub fn create_document(&self, token: &String, doc: &Document) -> Result<HashMessage> {
+    pub fn create_document(&self, token: &String, doc: &Document) -> Result<DocumentReceipt> {
         let document_url = format!("{}{}", self.uri, ROCKET_DOC_API);
         let client = Client::new();
 
@@ -87,9 +96,9 @@ impl DocumentApiClient{
         debug!("Status Code: {}", &response.status());
         match &response.status(){
             &StatusCode::CREATED => {
-                let hash_message = response.json()?;
-                println!("Payload: {:?}", hash_message);
-                Ok(hash_message)
+                let receipt = response.json()?;
+                println!("Payload: {:?}", receipt);
+                Ok(receipt)
             },
             _ => bail!("Error while calling create_document(): status {} content {:?}", response.status(), response.text())
         }

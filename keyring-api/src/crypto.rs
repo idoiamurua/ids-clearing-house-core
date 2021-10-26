@@ -8,7 +8,7 @@ use openssl::rand::rand_bytes;
 use sha2::Sha256;
 use std::collections::HashMap;
 use crate::model::doc_type::DocumentType;
-use crate::db::crypto::MasterKey;
+use crate::model::crypto::MasterKey;
 
 const EXP_KEY_SIZE: usize = 32;
 const EXP_NONCE_SIZE: usize = 12;
@@ -53,7 +53,7 @@ pub fn generate_key_map(mkey: MasterKey, dt: DocumentType) -> Result<KeyMap>{
     debug!("encrypting the key seed");
     let kdf = restore_kdf(&mkey.key)?;
     let mut okm = [0u8; EXP_BUFF_SIZE];
-    if kdf.expand(&mkey.salt, &mut okm).is_err(){
+    if kdf.expand(hex::decode(mkey.salt)?.as_slice(), &mut okm).is_err(){
         bail!("Error while generating key");
     }
     match encrypt_secret(&okm[..EXP_KEY_SIZE], &okm[EXP_KEY_SIZE..], secret){
@@ -69,7 +69,7 @@ pub fn restore_key_map(mkey: MasterKey, dt: DocumentType, keys_ct: Vec<u8>) -> R
     debug!("decrypting the key seed");
     let kdf = restore_kdf(&mkey.key)?;
     let mut okm = [0u8; EXP_BUFF_SIZE];
-    if kdf.expand(&mkey.salt, &mut okm).is_err(){
+    if kdf.expand(hex::decode(mkey.salt)?.as_slice(), &mut okm).is_err(){
         bail!("Error while generating key");
     }
 
@@ -124,10 +124,7 @@ pub fn encrypt_secret(key: &[u8], nonce: &[u8], secret: String) -> Result<Vec<u8
         bail!("Incorrect nonce size")
     }
     else{
-        debug!("!!!!!!!!!!!!!!!!! KEY: {} !!!!!!!!!!!!!!!!!!!!!", hex::encode_upper(key));
         let key = GenericArray::from_slice(key);
-
-
         let nonce = GenericArray::from_slice(nonce);
         let cipher = Aes256GcmSiv::new(key);
 
@@ -143,7 +140,6 @@ pub fn encrypt_secret(key: &[u8], nonce: &[u8], secret: String) -> Result<Vec<u8
 pub fn decrypt_secret(key: &[u8], nonce: &[u8], ct: &[u8]) -> Result<String>{
     debug!("key len = {}", key.len());
     debug!("ct len = {}", ct.len());
-    debug!("!!!!!!!!!!!!!!!!! KEY: {} !!!!!!!!!!!!!!!!!!!!!", hex::encode_upper(key));
     let key = GenericArray::from_slice(key);
     let nonce = GenericArray::from_slice(nonce);
     let cipher = Aes256GcmSiv::new(key);

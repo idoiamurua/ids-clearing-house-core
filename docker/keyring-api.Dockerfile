@@ -6,13 +6,17 @@
 #########################################################################################
 FROM debian:stretch-slim
 
-RUN apt-get update && \
-    apt-get --no-install-recommends install -y ca-certificates gnupg2 libssl1.1 libc6 supervisor
+RUN apt-get update \
+&& echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections \
+&& apt-get --no-install-recommends install -y -q ca-certificates gnupg2 libssl1.1 libc6 lsb-core
+
+# trust the DAPS certificate
+COPY docker/daps_cachain.crt /usr/local/share/ca-certificates/daps_cachain.crt
+RUN update-ca-certificates
 
 RUN mkdir /server
 WORKDIR /server
 
 COPY target/release/keyring-api .
-COPY docker/supervisord-keyring-api.conf supervisord.conf
 
-ENTRYPOINT ["/usr/bin/supervisord", "-c", "/server/supervisord.conf"]
+ENTRYPOINT ["/server/keyring-api"]
