@@ -44,4 +44,12 @@ To build the containers check out the repository and in the main directory execu
 
 `docker build -f docker/<dockerfile> . -t <image-name>`
 
-Please follow the Configuration section of the Service API you are trying to run, before using `docker run` oder `docker-compose`.
+Please read the Configuration section of the Service API you are trying to run, before using `docker run` oder `docker-compose`. All Containers build with the provided dockerfiles need two volumes:
+1. The configuration file `Rocket.toml`is expected at `/server/Rocket.toml`
+2. The folder containing the daps certificate is expected at `/server/certs`
+
+Containers of the Keyring API require an additional volume:
+3. `/server/init_db` needs to contain the `default_doc_type.json`
+
+
+
