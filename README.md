@@ -37,8 +37,8 @@ The Keyring API requires that its database contains the acceptable document type
 
 ## Docker Containers
 Dockerfiles are located [here](docker/). There are two types of dockerfiles:
-1. Simple builds (e.g. [dockerfile](docker/keyring-api.Dockerfile) that require you to build the Service APIs yourself using [Rust](https://www.rust-lang.org)
-2. Multistage builds (e.g. [dockerfile](docker/keyring-api-multistage.Dockerfile) that have a stage for building the rust code
+1. Simple builds (e.g. [dockerfile](docker/keyring-api.Dockerfile)) that require you to build the Service APIs yourself using [Rust](https://www.rust-lang.org)
+2. Multistage builds (e.g. [dockerfile](docker/keyring-api-multistage.Dockerfile)) that have a stage for building the rust code
 
 To build the containers check out the repository and in the main directory execute
 
