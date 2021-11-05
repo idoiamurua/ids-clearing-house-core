@@ -34,3 +34,27 @@ When starting the Clearing House Service API it also needs the following environ
 - `API_LOG_LEVEL`: Allowed log levels are: `Off`, `Error`, `Warn`, `Info`, `Debug`, `Trace`
 
 The Keyring API requires that its database contains the acceptable document types. Currently only the IDS_MESSAGE type is supported and needs to be present in the database for the Keyring API to function properly. The database will be populated with an initial document type that needs to be located in `init_db/default_doc_type.json`.
+
+## Docker Containers
+Dockerfiles are located [here](docker/). There are two types of dockerfiles:
+1. Simple builds (e.g. [dockerfile](docker/keyring-api.Dockerfile)) that require you to build the Service APIs yourself using [Rust](https://www.rust-lang.org)
+2. Multistage builds (e.g. [dockerfile](docker/keyring-api-multistage.Dockerfile)) that have a stage for building the rust code
+
+To build the containers check out the repository and in the main directory execute
+
+`docker build -f docker/<dockerfile> . -t <image-name>`
+
+Please read the Configuration section of the Service API you are trying to run, before using `docker run` oder `docker-compose`. All Containers build with the provided dockerfiles need two volumes:
+1. The configuration file `Rocket.toml`is expected at `/server/Rocket.toml`
+2. The folder containing the daps certificate is expected at `/server/certs`
+
+Containers of the Keyring API require an additional volume:
+3. `/server/init_db` needs to contain the `default_doc_type.json`
+
+## Building from Source
+The Clearing House Service APIs are written in [Rust](https://www.rust-lang.org) and can be build using
+
+`cargo build --release`
+
+The build requires OpenSSL to be installed.
+
