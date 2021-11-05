@@ -51,5 +51,10 @@ Please read the Configuration section of the Service API you are trying to run, 
 Containers of the Keyring API require an additional volume:
 3. `/server/init_db` needs to contain the `default_doc_type.json`
 
+## Building from Source
+The Clearing House Service APIs are written in [Rust](https://www.rust-lang.org) and can be build using
 
+`cargo build --release`
+
+The build requires OpenSSL to be installed.
 
