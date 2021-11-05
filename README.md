@@ -1,5 +1,5 @@
 # IDS Clearing House Core
-The IDS Clearing House Core consists of two microservices that support the [Clearing House Service](https://github.com/International-Data-Spaces-Association/ids-clearing-house-service), which is a prototype implementation of the Clearing House component of the [Industrial Data Space](https://github.com/International-Data-Spaces-Association/IDS-G). The Clearing House provides an API to store and retrieve data. Data in the Clearing House is stored encrypted and practically immutable.
+The IDS Clearing House Core consists of two microservices that support the [Clearing House Service](https://github.com/Fraunhofer-AISEC/ids-clearing-house-service), which is a prototype implementation of the Clearing House component of the [Industrial Data Space](https://github.com/International-Data-Spaces-Association/IDS-G). The Clearing House provides an API to store and retrieve data. Data in the Clearing House is stored encrypted and practically immutable.
 
 1. [Document API](document-api)
 2. [Keyring API](keyring-api)
