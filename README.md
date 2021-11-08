@@ -21,6 +21,24 @@ The Document API is responsible for storing the data and performs basic encrypti
 When starting the Clearing House Service API it also needs the following environment variables set:
 - `API_LOG_LEVEL`: Allowed log levels are: `Off`, `Error`, `Warn`, `Info`, `Debug`, `Trace`
 
+#### Example Configuration (docker-compose)
+```
+document-api:
+    container_name: "document-api"
+    depends_on:
+        - keyring-api
+        - document-mongo
+    environment:
+        # Allowed levels: Off, Error, Warn, Info, Debug, Trace
+        - API_LOG_LEVEL=Info
+    ports:
+        - "8001:8001"
+    volumes:
+        - ./data/document-api/Rocket.toml:/server/Rocket.toml
+        - ./data/certs:/server/certs
+```
+
+
 ### Keyring API
 The Keyring API is responsible for creating keys and the actual encryption and decryption of stored data. It is configured using the configuration file [`Rocket.toml`](keyring-api/Rocket.toml), which must specify a set of configuration options, such as the correct URLs of the database and other service apis:
 - `daps_api_url`: Specifies the URL of the DAPS Service. Required to validate DAPS token
@@ -31,6 +49,23 @@ When starting the Clearing House Service API it also needs the following environ
 - `API_LOG_LEVEL`: Allowed log levels are: `Off`, `Error`, `Warn`, `Info`, `Debug`, `Trace`
 
 The Keyring API requires that its database contains the acceptable document types. Currently only the IDS_MESSAGE type is supported and needs to be present in the database for the Keyring API to function properly. The database will be populated with an initial document type that needs to be located in `init_db/default_doc_type.json`.
+
+#### Example Configuration (docker-compose)
+```
+keyring-api:
+    container_name: "keyring-api"
+    depends_on:
+        - keyring-mongo
+    environment:
+        # Allowed levels: Off, Error, Warn, Info, Debug, Trace
+        - API_LOG_LEVEL=Info
+    ports:
+        - "8002:8002"
+    volumes:
+        - ./data/keyring-api/init_db:/server/init_db
+        - ./data/keyring-api/Rocket.toml:/server/Rocket.toml
+        - ./data/certs:/server/certs
+```
 
 ### DAPS
 Both Document API and Keyring API need to be able to validate the certificate used by the DAPS. If the DAPS uses a self-signed certificate the certificate needs to be added in two places:
