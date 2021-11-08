@@ -72,7 +72,7 @@ Both Document API and Keyring API need to be able to validate the certificate us
 1. `/server/certs`: The microservice will load certificates in this folder in the container and use them for validation. The certificate needs to be in DER format.
 2. `/usr/local/share/ca-certificates`: The microservice relies on openssl for parts of the validation and openssl will not trust a self-signed certificate unless it was added in this folder and `update-ca-certificates` was called in the docker container. Once this is done the container might need to be restarted.
 
-If you are using the pre-build docker containers and use `daps.aisec.fraunhofer.de` as the DAPS, only Step 1 is required. The certificate needed can be found [here](document-api/certs).
+If you are using [these dockerfiles](docker/) and use `daps.aisec.fraunhofer.de` as the DAPS, you only need to follow Step 1. The certificate needed for Step 1 can be found [here](document-api/certs).
 
 ## Docker Containers
 Dockerfiles are located [here](docker/). There are two types of dockerfiles:
