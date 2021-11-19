@@ -1,7 +1,9 @@
 // definition of daps constants
 pub const DAPS_AUD: &'static str = "idsc:IDS_CONNECTORS_ALL";
-pub const DAPS_JWKS: &'static str = ".well-known/jwks.json";
-pub const DAPS_KID: &'static str = "default";
+//pub const DAPS_JWKS: &'static str = ".well-known/jwks.json";
+pub const DAPS_JWKS: &'static str = "auth/realms/Daekin/protocol/openid-connect/certs";
+//pub const DAPS_KID: &'static str = "default";
+pub const DAPS_KID: &'static str = "LFOHnttpacm2iKEaJL-rSiIiELYLlI1FlfBP_gu32hw";
 pub const DAPS_AUTHHEADER: &'static str = "Authorization";
 pub const DAPS_AUTHBEARER: &'static str = "Bearer";
 pub const DAPS_CERTIFICATES: &'static str = "certs";
